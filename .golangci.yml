@@ -20,17 +20,12 @@ linters-settings:
   goimports:
     local-prefixes: github.com/parevo-lab/iyzipay-go
 
-  golint:
-    min-confidence: 0
-
   govet:
     check-shadowing: true
+    fieldalignment: false
 
   lll:
     line-length: 140
-
-  maligned:
-    suggest-new: true
 
   misspell:
     locale: US
@@ -48,10 +43,12 @@ linters-settings:
     multi-if: false
     multi-func: false
 
+  revive:
+    min-confidence: 0
+
 linters:
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     - errcheck
@@ -60,29 +57,25 @@ linters:
     - gocritic
     - gofmt
     - goimports
-    - golint
+    - revive
     - goprintffuncname
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret
     - rowserrcheck
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
   disable:
-    - maligned
     - prealloc
 
 issues:
