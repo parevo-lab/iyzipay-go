@@ -1,6 +1,7 @@
 package iyzipay
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -324,4 +325,134 @@ func TestValidateConfigFunction(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFlexibleUnmarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		target   interface{}
+		expected interface{}
+		wantErr  bool
+	}{
+		{
+			name:     "string to string (normal case)",
+			jsonData: `{"price": "10.50"}`,
+			target:   &struct{ Price string `json:"price"` }{},
+			expected: &struct{ Price string `json:"price"` }{Price: "10.50"},
+			wantErr:  false,
+		},
+		{
+			name:     "number to string (flexible case)",
+			jsonData: `{"price": 10.50}`,
+			target:   &struct{ Price string `json:"price"` }{},
+			expected: &struct{ Price string `json:"price"` }{Price: "10.5"},
+			wantErr:  false,
+		},
+		{
+			name:     "integer to string",
+			jsonData: `{"price": 10}`,
+			target:   &struct{ Price string `json:"price"` }{},
+			expected: &struct{ Price string `json:"price"` }{Price: "10"},
+			wantErr:  false,
+		},
+		{
+			name:     "string to int",
+			jsonData: `{"count": "42"}`,
+			target:   &struct{ Count int `json:"count"` }{},
+			expected: &struct{ Count int `json:"count"` }{Count: 42},
+			wantErr:  false,
+		},
+		{
+			name:     "float to int",
+			jsonData: `{"count": 42.0}`,
+			target:   &struct{ Count int `json:"count"` }{},
+			expected: &struct{ Count int `json:"count"` }{Count: 42},
+			wantErr:  false,
+		},
+		{
+			name:     "bool to string",
+			jsonData: `{"active": true}`,
+			target:   &struct{ Active string `json:"active"` }{},
+			expected: &struct{ Active string `json:"active"` }{Active: "true"},
+			wantErr:  false,
+		},
+		{
+			name:     "string to bool",
+			jsonData: `{"active": "true"}`,
+			target:   &struct{ Active bool `json:"active"` }{},
+			expected: &struct{ Active bool `json:"active"` }{Active: true},
+			wantErr:  false,
+		},
+		{
+			name:     "complex payment response",
+			jsonData: `{"status": "success", "price": 10.50, "installment": 1, "fraudStatus": "1", "paymentId": "12345"}`,
+			target: &struct {
+				Status      string `json:"status"`
+				Price       string `json:"price"`
+				Installment int    `json:"installment"`
+				FraudStatus int    `json:"fraudStatus"`
+				PaymentID   string `json:"paymentId"`
+			}{},
+			expected: &struct {
+				Status      string `json:"status"`
+				Price       string `json:"price"`
+				Installment int    `json:"installment"`
+				FraudStatus int    `json:"fraudStatus"`
+				PaymentID   string `json:"paymentId"`
+			}{
+				Status:      "success",
+				Price:       "10.5",
+				Installment: 1,
+				FraudStatus: 1,
+				PaymentID:   "12345",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := FlexibleUnmarshal([]byte(tt.jsonData), tt.target)
+			
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FlexibleUnmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				// Use reflection to compare the results
+				if !compareStructs(tt.target, tt.expected) {
+					t.Errorf("FlexibleUnmarshal() result = %+v, expected %+v", tt.target, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+func compareStructs(a, b interface{}) bool {
+	aValue := reflect.ValueOf(a)
+	bValue := reflect.ValueOf(b)
+	
+	if aValue.Kind() == reflect.Ptr {
+		aValue = aValue.Elem()
+	}
+	if bValue.Kind() == reflect.Ptr {
+		bValue = bValue.Elem()
+	}
+	
+	if aValue.Type() != bValue.Type() {
+		return false
+	}
+	
+	for i := 0; i < aValue.NumField(); i++ {
+		aField := aValue.Field(i)
+		bField := bValue.Field(i)
+		
+		if !reflect.DeepEqual(aField.Interface(), bField.Interface()) {
+			return false
+		}
+	}
+	
+	return true
 }

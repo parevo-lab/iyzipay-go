@@ -237,6 +237,291 @@ func mergeObjects(obj1, obj2 map[string]interface{}) map[string]interface{} {
 	return merged
 }
 
+// FlexibleUnmarshal performs flexible JSON unmarshal that handles type mismatches
+func FlexibleUnmarshal(data []byte, v interface{}) error {
+	// First try normal unmarshal
+	if err := json.Unmarshal(data, v); err == nil {
+		return nil
+	}
+
+	// If normal unmarshal fails, try flexible unmarshal
+	var rawData map[string]interface{}
+	if err := json.Unmarshal(data, &rawData); err != nil {
+		return err
+	}
+
+	return flexibleMapToStruct(rawData, v)
+}
+
+// flexibleMapToStruct converts map to struct with flexible type handling
+func flexibleMapToStruct(data map[string]interface{}, v interface{}) error {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return fmt.Errorf("destination must be a non-nil pointer")
+	}
+
+	rv = rv.Elem()
+	if rv.Kind() != reflect.Struct {
+		return fmt.Errorf("destination must be a pointer to struct")
+	}
+
+	rt := rv.Type()
+	for i := 0; i < rv.NumField(); i++ {
+		field := rv.Field(i)
+		fieldType := rt.Field(i)
+
+		if !field.CanSet() {
+			continue
+		}
+
+		jsonTag := fieldType.Tag.Get("json")
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+
+		tagParts := strings.Split(jsonTag, ",")
+		fieldName := tagParts[0]
+
+		value, exists := data[fieldName]
+		if !exists {
+			continue
+		}
+
+		if err := setFlexibleValue(field, value); err != nil {
+			return fmt.Errorf("error setting field %s: %v", fieldName, err)
+		}
+	}
+
+	return nil
+}
+
+// setFlexibleValue sets value to field with flexible type conversion
+func setFlexibleValue(field reflect.Value, value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	targetType := field.Type()
+	sourceValue := reflect.ValueOf(value)
+
+	// Handle pointer types
+	if targetType.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			field.Set(reflect.New(targetType.Elem()))
+		}
+		return setFlexibleValue(field.Elem(), value)
+	}
+
+	// Handle same types
+	if sourceValue.Type().AssignableTo(targetType) {
+		field.Set(sourceValue)
+		return nil
+	}
+
+	// Handle conversions
+	switch targetType.Kind() {
+	case reflect.String:
+		return setStringValue(field, value)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return setIntValue(field, value)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return setUintValue(field, value)
+	case reflect.Float32, reflect.Float64:
+		return setFloatValue(field, value)
+	case reflect.Bool:
+		return setBoolValue(field, value)
+	case reflect.Slice:
+		return setSliceValue(field, value)
+	case reflect.Struct:
+		return setStructValue(field, value)
+	default:
+		return fmt.Errorf("unsupported type conversion from %T to %s", value, targetType)
+	}
+}
+
+// setStringValue converts any value to string
+func setStringValue(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case string:
+		field.SetString(v)
+	case int, int8, int16, int32, int64:
+		field.SetString(fmt.Sprintf("%d", v))
+	case uint, uint8, uint16, uint32, uint64:
+		field.SetString(fmt.Sprintf("%d", v))
+	case float32, float64:
+		field.SetString(fmt.Sprintf("%g", v))
+	case bool:
+		field.SetString(fmt.Sprintf("%t", v))
+	default:
+		field.SetString(fmt.Sprintf("%v", v))
+	}
+	return nil
+}
+
+// setIntValue converts any value to int
+func setIntValue(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case int:
+		field.SetInt(int64(v))
+	case int8:
+		field.SetInt(int64(v))
+	case int16:
+		field.SetInt(int64(v))
+	case int32:
+		field.SetInt(int64(v))
+	case int64:
+		field.SetInt(v)
+	case uint, uint8, uint16, uint32, uint64:
+		field.SetInt(int64(reflect.ValueOf(v).Uint()))
+	case float32:
+		field.SetInt(int64(v))
+	case float64:
+		field.SetInt(int64(v))
+	case string:
+		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+			field.SetInt(i)
+		} else if f, err := strconv.ParseFloat(v, 64); err == nil {
+			field.SetInt(int64(f))
+		} else {
+			return fmt.Errorf("cannot convert string %q to int", v)
+		}
+	default:
+		return fmt.Errorf("cannot convert %T to int", v)
+	}
+	return nil
+}
+
+// setUintValue converts any value to uint
+func setUintValue(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case uint:
+		field.SetUint(uint64(v))
+	case uint8:
+		field.SetUint(uint64(v))
+	case uint16:
+		field.SetUint(uint64(v))
+	case uint32:
+		field.SetUint(uint64(v))
+	case uint64:
+		field.SetUint(v)
+	case int, int8, int16, int32, int64:
+		val := reflect.ValueOf(v).Int()
+		if val < 0 {
+			return fmt.Errorf("cannot convert negative int %d to uint", val)
+		}
+		field.SetUint(uint64(val))
+	case float32:
+		if v < 0 {
+			return fmt.Errorf("cannot convert negative float %f to uint", v)
+		}
+		field.SetUint(uint64(v))
+	case float64:
+		if v < 0 {
+			return fmt.Errorf("cannot convert negative float %f to uint", v)
+		}
+		field.SetUint(uint64(v))
+	case string:
+		if i, err := strconv.ParseUint(v, 10, 64); err == nil {
+			field.SetUint(i)
+		} else if f, err := strconv.ParseFloat(v, 64); err == nil {
+			if f < 0 {
+				return fmt.Errorf("cannot convert negative float %f to uint", f)
+			}
+			field.SetUint(uint64(f))
+		} else {
+			return fmt.Errorf("cannot convert string %q to uint", v)
+		}
+	default:
+		return fmt.Errorf("cannot convert %T to uint", v)
+	}
+	return nil
+}
+
+// setFloatValue converts any value to float
+func setFloatValue(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case float32:
+		field.SetFloat(float64(v))
+	case float64:
+		field.SetFloat(v)
+	case int, int8, int16, int32, int64:
+		field.SetFloat(float64(reflect.ValueOf(v).Int()))
+	case uint, uint8, uint16, uint32, uint64:
+		field.SetFloat(float64(reflect.ValueOf(v).Uint()))
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			field.SetFloat(f)
+		} else {
+			return fmt.Errorf("cannot convert string %q to float", v)
+		}
+	default:
+		return fmt.Errorf("cannot convert %T to float", v)
+	}
+	return nil
+}
+
+// setBoolValue converts any value to bool
+func setBoolValue(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case bool:
+		field.SetBool(v)
+	case string:
+		if b, err := strconv.ParseBool(v); err == nil {
+			field.SetBool(b)
+		} else {
+			return fmt.Errorf("cannot convert string %q to bool", v)
+		}
+	case int, int8, int16, int32, int64:
+		field.SetBool(reflect.ValueOf(v).Int() != 0)
+	case uint, uint8, uint16, uint32, uint64:
+		field.SetBool(reflect.ValueOf(v).Uint() != 0)
+	case float32, float64:
+		field.SetBool(reflect.ValueOf(v).Float() != 0)
+	default:
+		return fmt.Errorf("cannot convert %T to bool", v)
+	}
+	return nil
+}
+
+// setSliceValue converts slice values
+func setSliceValue(field reflect.Value, value interface{}) error {
+	sourceSlice := reflect.ValueOf(value)
+	if sourceSlice.Kind() != reflect.Slice {
+		return fmt.Errorf("source is not a slice")
+	}
+
+	elementType := field.Type().Elem()
+	newSlice := reflect.MakeSlice(field.Type(), sourceSlice.Len(), sourceSlice.Len())
+
+	for i := 0; i < sourceSlice.Len(); i++ {
+		sourceElem := sourceSlice.Index(i)
+		targetElem := newSlice.Index(i)
+
+		if elementType.Kind() == reflect.Ptr {
+			newElem := reflect.New(elementType.Elem())
+			if err := setFlexibleValue(newElem.Elem(), sourceElem.Interface()); err != nil {
+				return err
+			}
+			targetElem.Set(newElem)
+		} else {
+			if err := setFlexibleValue(targetElem, sourceElem.Interface()); err != nil {
+				return err
+			}
+		}
+	}
+
+	field.Set(newSlice)
+	return nil
+}
+
+// setStructValue converts struct values
+func setStructValue(field reflect.Value, value interface{}) error {
+	if mapValue, ok := value.(map[string]interface{}); ok {
+		return flexibleMapToStruct(mapValue, field.Addr().Interface())
+	}
+	return fmt.Errorf("cannot convert %T to struct", value)
+}
+
 // validateConfig validates the client configuration
 func validateConfig(config *Config) error {
 	if config.BaseURL == "" {

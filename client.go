@@ -164,7 +164,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	}
 
 	if result != nil {
-		if err := json.Unmarshal(respBody, result); err != nil {
+		if err := FlexibleUnmarshal(respBody, result); err != nil {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
 	}
