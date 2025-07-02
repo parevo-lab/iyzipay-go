@@ -35,16 +35,8 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewClientFromEnv(t *testing.T) {
-	// Note: This test would need environment variables set
-	// For now, just test that it doesn't panic
-	defer func() {
-		if r := recover(); r != nil {
-			// Expected to panic if env vars are not set
-		}
-	}()
-
-	// This will panic if env vars are not set, which is expected
-	// client := NewClientFromEnv()
+	// Skip this test in CI as environment variables are not set
+	t.Skip("Skipping NewClientFromEnv test - requires environment variables")
 }
 
 func TestMakeRequest(t *testing.T) {
