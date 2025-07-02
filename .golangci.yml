@@ -1,0 +1,112 @@
+run:
+  timeout: 5m
+  go: "1.21"
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/parevo-lab/iyzipay-go
+
+  golint:
+    min-confidence: 0
+
+  govet:
+    check-shadowing: true
+
+  lll:
+    line-length: 140
+
+  maligned:
+    suggest-new: true
+
+  misspell:
+    locale: US
+
+  nakedret:
+    max-func-lines: 30
+
+  unparam:
+    check-exported: false
+
+  unused:
+    check-exported: false
+
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+linters:
+  enable:
+    - bodyclose
+    - deadcode
+    - depguard
+    - dogsled
+    - errcheck
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - interfacer
+    - lll
+    - misspell
+    - nakedret
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+
+  disable:
+    - maligned
+    - prealloc
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+service:
+  golangci-lint-version: 1.54.x
