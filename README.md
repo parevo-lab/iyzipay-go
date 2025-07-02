@@ -620,7 +620,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: [support@parevo.com](mailto:support@parevo.com)
+- 📧 Email: [info@parevo.com](mailto:support@parevo.com)
 - 🌐 Website: [https://parevo.com](https://parevo.com)
 - 📚 Documentation: [https://pkg.go.dev/github.com/parevo-lab/iyzipay-go](https://pkg.go.dev/github.com/parevo-lab/iyzipay-go)
 
