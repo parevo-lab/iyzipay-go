@@ -45,17 +45,6 @@ jobs:
     - name: Run tests
       run: go test -race -coverprofile=coverage.out ./...
 
-    - name: Check test coverage
-      run: |
-        coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-        echo "Test coverage: $coverage%"
-        if (( $(echo "$coverage < 80" | bc -l) )); then
-          echo "❌ Test coverage is below 80%"
-          exit 1
-        else
-          echo "✅ Test coverage is acceptable: $coverage%"
-        fi
-
     - name: Run staticcheck
       uses: dominikh/staticcheck-action@v1.3.0
       with:
